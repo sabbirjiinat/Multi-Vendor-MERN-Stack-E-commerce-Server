@@ -53,6 +53,18 @@ async function run() {
       .db("multiVendorECommerce")
       .collection("products");
 
+    const categoryCollection = client
+      .db("multiVendorECommerce")
+      .collection("category");
+
+    const wishlistCollection = client
+      .db("multiVendorECommerce")
+      .collection("wishlist");
+
+    const addToCartCollection = client
+      .db("multiVendorECommerce")
+      .collection("addToCart");
+
     /* Json web token */
     app.post("/jwt", (req, res) => {
       const email = req.body;
@@ -75,8 +87,14 @@ async function run() {
       res.send(result);
     });
 
+    /* Get category collection */
+    app.get("/category", async (req, res) => {
+      const result = await categoryCollection.find().toArray();
+      res.send(result);
+    });
+
     /* Create user to admin */
-    app.patch("/users/:email", async (req, res) => {
+    app.patch("/users/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
       const { role } = req.body;
       const query = { email: email };
@@ -119,8 +137,8 @@ async function run() {
       res.send(result);
     });
 
-     /* Get seller */
-     app.get("/users/seller/:email", verifyJWT, async (req, res) => {
+    /* Get seller */
+    app.get("/users/seller/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
       if (req.decode.email !== email) {
         return res.send({ seller: false });
@@ -138,18 +156,72 @@ async function run() {
     });
 
     /* Get AllProducts */
-    app.get('/products',async(req,res)=>{
+    app.get("/allProducts", async (req, res) => {
       const result = await productsCollection.find().toArray();
-      res.send(result)
-    })
+      res.send(result);
+    });
+
+    /* Get best deals products */
+    app.get("/allProducts/best-deals", async (req, res) => {
+      const products = await productsCollection.find().toArray();
+      const sortProducts = products.sort((a, b) => b.total_sell - a.total_sell);
+      const result = sortProducts.slice(0, 5);
+      res.send(result);
+    });
+
+    app.get("/products", async (req, res) => {
+      const category = req.query.category;
+      if (!category) {
+        return res.send([]);
+      }
+      const query = { category: category };
+      const result = await productsCollection.find(query).toArray();
+      res.send(result);
+    });
 
     /* Get single products */
-    app.get('/products/:id',async(req,res)=>{
+    app.get("/allProducts/:id", async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)}
-      const result = await productsCollection.findOne(query)
-      res.send(result)
-    })
+      const query = { _id: new ObjectId(id) };
+      const result = await productsCollection.findOne(query);
+      res.send(result);
+    });
+
+    /* Add to wishlist */
+    app.post("/wishlist", async (req, res) => {
+      const product = req.body;
+      const result = await wishlistCollection.insertOne(product);
+      res.send(result);
+    });
+    /* Get wishlist product*/
+    app.get("/wishlist/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const result = await wishlistCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    /*Delete wishlist product*/
+    app.delete("/wishlist/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await wishlistCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    /* Post wishlist to addToCart */
+    app.post("/addToCart", async (req, res) => {
+      const addToCartProduct = req.body;
+      const result = await addToCartCollection.insertOne(addToCartProduct);
+      res.send(result);
+    });
+
+    app.get("/addToCart/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const result = await addToCartCollection.find(query).toArray();
+      res.send(result);
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
