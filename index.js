@@ -87,6 +87,16 @@ async function run() {
       res.send(result);
     });
 
+    app.put("/users/update", async (req, res) => {
+      const email = req.query.email;
+      const query = { email: email };
+      const user = req.body;
+      const option = { upsert: true };
+      const updatedDoc = {
+        $set: {},
+      };
+    });
+
     /* Get category collection */
     app.get("/category", async (req, res) => {
       const result = await categoryCollection.find().toArray();
@@ -157,7 +167,17 @@ async function run() {
 
     /* Get AllProducts */
     app.get("/allProducts", async (req, res) => {
-      const result = await productsCollection.find().toArray();
+      const status = req.query.status;
+      const query = { status: status };
+      const result = await productsCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    /* Get pending products */
+    app.get("/allProducts/:pending", verifyJWT, async (req, res) => {
+      const status = req.params.pending;
+      const query = { status: status };
+      const result = await productsCollection.find(query).toArray();
       res.send(result);
     });
 
@@ -184,6 +204,24 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await productsCollection.findOne(query);
+      res.send(result);
+    });
+
+    app.post("/allProducts", async (req, res) => {
+      const product = req.body;
+      const result = await productsCollection.insertOne(product);
+      res.send(result);
+    });
+
+    /* Approve product */
+    app.patch("/allProducts/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const status = req.body;
+      const updatedDoc = {
+        $set: status,
+      };
+      const result = await productsCollection.updateOne(query, updatedDoc);
       res.send(result);
     });
 
@@ -215,14 +253,20 @@ async function run() {
       const result = await addToCartCollection.insertOne(addToCartProduct);
       res.send(result);
     });
-
+    /* Get all cart product */
     app.get("/addToCart/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
       const result = await addToCartCollection.find(query).toArray();
       res.send(result);
     });
-
+    /* Delete single cart product */
+    app.delete("/addToCart/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await addToCartCollection.deleteOne(query);
+      res.send(result);
+    });
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
