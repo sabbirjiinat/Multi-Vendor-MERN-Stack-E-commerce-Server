@@ -4,6 +4,7 @@ const app = express();
 require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const stripe = require("stripe")(process.env.STRIPE_KEY);
 
 //Middleware
 app.use(cors());
@@ -64,6 +65,9 @@ async function run() {
     const addToCartCollection = client
       .db("multiVendorECommerce")
       .collection("addToCart");
+    const paymentCollection = client
+      .db("multiVendorECommerce")
+      .collection("payment");
 
     /* Json web token */
     app.post("/jwt", (req, res) => {
@@ -166,44 +170,44 @@ async function run() {
     });
 
     /* Get AllProducts */
-    app.get("/allProducts", async (req, res) => {
-      const status = req.query.status;
+    app.get("/products/status/:approve", async (req, res) => {
+      const status = req.params.approve;
       const query = { status: status };
       const result = await productsCollection.find(query).toArray();
       res.send(result);
     });
 
     /* Get pending products */
-    app.get("/allProducts/:pending", verifyJWT, async (req, res) => {
+    app.get("/products/status/:pending", async (req, res) => {
       const status = req.params.pending;
       const query = { status: status };
       const result = await productsCollection.find(query).toArray();
       res.send(result);
     });
 
-    /* Get best deals products */
-    app.get("/allProducts/best-deals", async (req, res) => {
-      const products = await productsCollection.find().toArray();
-      const sortProducts = products.sort((a, b) => b.total_sell - a.total_sell);
-      const result = sortProducts.slice(0, 5);
+    /* Get single products */
+    app.get("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await productsCollection.findOne(query);
       res.send(result);
     });
 
-    app.get("/products", async (req, res) => {
+    // /* Get best deals products */
+    // app.get("/products/sort/bestDeals", async (req, res) => {
+    //   const products = await productsCollection.find().toArray();
+    //   const sortProducts = products.sort((a, b) => b.total_sell - a.total_sell);
+    //   const result = sortProducts.slice(0, 5);
+    //   res.send(result);
+    // });
+
+    app.get("/allProducts", async (req, res) => {
       const category = req.query.category;
       if (!category) {
         return res.send([]);
       }
       const query = { category: category };
       const result = await productsCollection.find(query).toArray();
-      res.send(result);
-    });
-
-    /* Get single products */
-    app.get("/allProducts/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await productsCollection.findOne(query);
       res.send(result);
     });
 
@@ -222,6 +226,13 @@ async function run() {
         $set: status,
       };
       const result = await productsCollection.updateOne(query, updatedDoc);
+      res.send(result);
+    });
+
+    app.delete("/products/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await productsCollection.deleteOne(query);
       res.send(result);
     });
 
@@ -267,6 +278,46 @@ async function run() {
       const result = await addToCartCollection.deleteOne(query);
       res.send(result);
     });
+
+    app.patch("/addToCart/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const { quantity } = req.body;
+      const updatedDoc = {
+        $set: {
+          quantity: parseFloat(quantity),
+        },
+      };
+      const result = await addToCartCollection.updateOne(query, updatedDoc);
+      res.send(result);
+    });
+
+    app.post("/create-payment-intent",verifyJWT, async (req, res) => {
+      const { price } = req.body;
+      const amount = parseInt(price * 100);
+  
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
+
+    app.post('/payment',verifyJWT,async(req,res)=>{
+      const product = req.body;
+      const result = await paymentCollection.insertOne(product);
+      const query = {_id: {$in: product.payItemId.map(id => new ObjectId (id) )}}
+      const deleteProduct = await addToCartCollection.deleteMany(query)
+      res.send({
+        result,
+        deleteProduct
+      })
+    })
+
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
