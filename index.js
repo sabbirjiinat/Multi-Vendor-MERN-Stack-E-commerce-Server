@@ -307,6 +307,38 @@ async function run() {
       });
     });
 
+    app.get('/orders',verifyJWT,async(req,res)=>{
+      const result = await paymentCollection.find().toArray();
+      res.send(result)
+    })
+
+    app.get('/payment/:email',async(req,res)=>{
+      const email = req.params.email
+      const query = {userEmail:email}
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result)
+    })
+
+    app.delete('/payment/:id',verifyJWT,async(req,res)=>{
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = await paymentCollection.deleteOne(query);
+      res.send(result)
+    })
+
+    app.patch('/orders/:id',async(req,res)=>{
+      const id = req.params.id;
+      const query = {_id : new ObjectId(id)}
+      const {status} = req.body;
+      const updatedDoc = {
+        $set:{
+          status:status
+        }
+      }
+      const result = await paymentCollection.updateOne(query,updatedDoc)
+      res.send(result)
+    })
+
     app.post('/payment',verifyJWT,async(req,res)=>{
       const product = req.body;
       const result = await paymentCollection.insertOne(product);
